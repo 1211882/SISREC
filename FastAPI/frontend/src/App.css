@@ -1,0 +1,606 @@
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap");
+
+:root {
+  --bg: #f8fbff;
+  --bg-accent: #fff8ef;
+  --text: #1f2e3a;
+  --muted: #5f7280;
+  --line: #d7e4ec;
+  --primary: #0d8c78;
+  --primary-dark: #0a6f60;
+  --card: #ffffff;
+  --chip: #e9f8f4;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: "Outfit", "Segoe UI", sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(50rem 28rem at 90% -10%, #ffe8cb 0%, transparent 55%),
+    radial-gradient(40rem 24rem at -10% 0%, #d6f4ff 0%, transparent 60%),
+    linear-gradient(160deg, var(--bg), var(--bg-accent));
+}
+
+.app-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 26px;
+}
+
+.brand {
+  font-family: "Fraunces", serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.text-link {
+  color: var(--text);
+  text-decoration: none;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+.text-link:hover {
+  background: #eef5f8;
+}
+
+.user-pill {
+  background: #e9f8f4;
+  border: 1px solid #bfe7da;
+  color: #0d6651;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.button {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font: inherit;
+  font-weight: 700;
+  padding: 10px 14px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button.ghost {
+  background: white;
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.button.solid {
+  background: var(--primary);
+  color: white;
+  box-shadow: 0 10px 18px rgba(13, 140, 120, 0.22);
+}
+
+.button.solid:hover {
+  background: var(--primary-dark);
+}
+
+.button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.page-wrap {
+  width: min(1100px, 100%);
+  margin: 0 auto;
+  padding: 8px 20px 32px;
+}
+
+.hero-panel,
+.list-panel {
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 22px 48px rgba(31, 46, 58, 0.12);
+  padding: 24px;
+}
+
+.hero-panel {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 20px;
+}
+
+.eyebrow {
+  display: inline-block;
+  background: var(--chip);
+  color: var(--primary-dark);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  margin: 0 0 8px;
+}
+
+.hero-copy h1,
+.list-header h1 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.1;
+}
+
+.lead,
+.list-header p {
+  color: var(--muted);
+  margin: 12px 0 0;
+  max-width: 42ch;
+}
+
+.cta {
+  margin-top: 18px;
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.recommendation-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 14px;
+  animation: reveal 450ms ease both;
+}
+
+.recommendation-card h3 {
+  margin: 0 0 8px;
+}
+
+.recommendation-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-block;
+  margin-top: 10px;
+  background: #f6eee1;
+  color: #7b5a24;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.list-header {
+  margin-bottom: 18px;
+}
+
+.paging-toolbar {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.paging-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.restaurant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.restaurant-card-link {
+  text-decoration: none;
+  color: inherit;
+}
+
+.restaurant-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  padding: 14px;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.restaurant-card-link:hover .restaurant-card {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 18px rgba(31, 46, 58, 0.12);
+}
+
+.restaurant-card h3 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.restaurant-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.card-meta {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.state-message {
+  color: var(--muted);
+}
+
+.state-message.error {
+  color: #b3343a;
+}
+
+.detail-panel {
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 22px 48px rgba(31, 46, 58, 0.12);
+  padding: 20px;
+  display: grid;
+  gap: 14px;
+}
+
+.detail-top {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.detail-header h1 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+}
+
+.detail-header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detail-card {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  padding: 14px;
+}
+
+.detail-card h3 {
+  margin: 0 0 10px;
+}
+
+.detail-card ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+}
+
+.detail-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.attribute-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attribute-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #e9f8f4;
+  border: 1px solid #bfe7da;
+  color: #0d6651;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.hours-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.hours-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  background: #f9fcff;
+}
+
+.hours-card.open {
+  border-color: #bfe7da;
+  background: #f2fcf8;
+}
+
+.hours-card.closed {
+  border-color: #efb9b9;
+  background: #fff1f1;
+}
+
+.hours-day {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.hours-time {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.hours-card.closed .hours-day {
+  color: #9b1c1c;
+}
+
+.hours-card.closed .hours-time {
+  color: #c42b2b;
+}
+
+.detail-card pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+  font-family: "Outfit", "Segoe UI", sans-serif;
+}
+
+.detail-span {
+  grid-column: 1 / -1;
+}
+
+.profile-panel {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 22px 48px rgba(31, 46, 58, 0.12);
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.profile-header h1 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(1.8rem, 3vw, 2.3rem);
+}
+
+.profile-header p {
+  margin: 10px 0 0;
+  color: var(--muted);
+}
+
+.profile-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.profile-forms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.friends-section h3 {
+  margin: 0 0 10px;
+}
+
+.friend-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.friend-item {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.friend-item p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.auth-panel {
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 22px 48px rgba(31, 46, 58, 0.12);
+  padding: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.auth-copy h1 {
+  margin: 0;
+  font-family: "Fraunces", serif;
+  font-size: clamp(1.8rem, 3vw, 2.3rem);
+}
+
+.auth-copy p {
+  color: var(--muted);
+  margin-top: 12px;
+}
+
+.auth-form {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.auth-form input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.auth-form input:focus {
+  outline: 2px solid #ccefe6;
+  border-color: var(--primary);
+}
+
+.check-row {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.check-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.auth-footnote {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.auth-footnote a {
+  color: var(--primary-dark);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.form-message {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+}
+
+.form-message.error {
+  background: #fff2f2;
+  border-color: #f2c7c9;
+  color: #9f2a2f;
+}
+
+.form-message.success {
+  background: #eaf9f3;
+  border-color: #b9e9d4;
+  color: #116549;
+}
+
+@keyframes reveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 900px) {
+  .hero-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topbar-nav {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .page-wrap {
+    padding: 6px 12px 22px;
+  }
+
+  .hero-panel,
+  .list-panel {
+    padding: 16px;
+    border-radius: 18px;
+  }
+}
