@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE, fetchWithTimeout } from "../utils/api";
 
-const API_BASE = "http://127.0.0.1:8000";
 const PAGE_SIZE = 24;
 
 function RestaurantsPage() {
@@ -9,8 +9,34 @@ function RestaurantsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
+  const [sortBy, setSortBy] = useState("stars");
+  const [sortOrder, setSortOrder] = useState("desc");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [categoriesError, setCategoriesError] = useState(false);
+
+  useEffect(() => {
+    async function loadCategories() {
+      try {
+        const response = await fetchWithTimeout(`${API_BASE}/businesses/categories`);
+        if (!response.ok) {
+          throw new Error("Failed to load categories.");
+        }
+        const data = await response.json();
+        setCategories(Array.isArray(data) ? data : []);
+        setCategoriesError(false);
+      } catch (err) {
+        console.error("Failed to load categories", err);
+        setCategories([]);
+        setCategoriesError(err.message || true);
+      }
+    }
+
+    loadCategories();
+  }, []);
 
   useEffect(() => {
     async function fetchBusinesses() {
@@ -19,14 +45,17 @@ function RestaurantsPage() {
 
       try {
         const offset = (page - 1) * PAGE_SIZE;
-        const response = await fetch(`${API_BASE}/businesses?limit=${PAGE_SIZE}&offset=${offset}`);
+        let url = `${API_BASE}/businesses?limit=${PAGE_SIZE}&offset=${offset}&sort_by=${sortBy}&order=${sortOrder}`;
+        if (selectedCategory) {
+          url += `&category=${encodeURIComponent(selectedCategory)}`;
+        }
+        const response = await fetchWithTimeout(url);
         if (!response.ok) {
           throw new Error("Failed to load restaurants list.");
         }
 
         const data = await response.json();
         if (Array.isArray(data)) {
-          // Compatibilidade com formato antigo da API.
           setItems(data);
           setTotal(data.length);
           setPages(1);
@@ -36,6 +65,7 @@ function RestaurantsPage() {
           setPages(Math.max(1, Number(data.pages || 1)));
         }
       } catch (err) {
+        console.error("Failed to load restaurants", err);
         setError(err.message || "Unexpected error.");
       } finally {
         setLoading(false);
@@ -43,7 +73,7 @@ function RestaurantsPage() {
     }
 
     fetchBusinesses();
-  }, [page]);
+  }, [page, sortBy, sortOrder, selectedCategory]);
 
   function goPrevious() {
     setPage((current) => Math.max(1, current - 1));
@@ -51,6 +81,16 @@ function RestaurantsPage() {
 
   function goNext() {
     setPage((current) => Math.min(pages, current + 1));
+  }
+
+  function changeSortOrder(event) {
+    setSortOrder(event.target.value);
+    setPage(1);
+  }
+
+  function changeCategory(event) {
+    setSelectedCategory(event.target.value);
+    setPage(1);
   }
 
   return (
@@ -70,6 +110,36 @@ function RestaurantsPage() {
               Total: {total} restaurants | Page {page} of {pages}
             </p>
             <div className="paging-actions">
+              {categories.length > 0 && (
+                <label className="sort-control">
+                  Category
+                  <select value={selectedCategory} onChange={changeCategory}>
+                    <option value="">All categories</option>
+                    {categories.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {categoriesError && categories.length === 0 && (
+                <p className="state-message error">Failed to load categories. The restaurant list is still available.</p>
+              )}
+              <label className="sort-control">
+                Sort field
+                <select value={sortBy} onChange={(e) => { setSortBy(e.target.value); setPage(1); }}>
+                  <option value="stars">Rating</option>
+                  <option value="review_count">Number of reviews</option>
+                </select>
+              </label>
+              <label className="sort-control">
+                Order
+                <select value={sortOrder} onChange={changeSortOrder}>
+                  <option value="desc">Descending</option>
+                  <option value="asc">Ascending</option>
+                </select>
+              </label>
               <button
                 className="button ghost"
                 type="button"
@@ -96,16 +166,17 @@ function RestaurantsPage() {
                 className="restaurant-card-link"
                 to={`/restaurants/${business.business_id}`}
               >
-              <article className="restaurant-card">
-                <h3>{business.name || "No name"}</h3>
-                <p>
-                  {(business.city || "City n/a") + ", " + (business.state || "State n/a")}
-                </p>
-                <div className="card-meta">
-                  <span>Stars: {business.stars ?? "-"}</span>
-                  <span>{business.is_open ? "Open" : "Closed"}</span>
-                </div>
-              </article>
+                <article className="restaurant-card">
+                  <h3>{business.name || "No name"}</h3>
+                  <p>
+                    {(business.city || "City n/a") + ", " + (business.state || "State n/a")}
+                  </p>
+                  <div className="card-meta">
+                    <span>Stars: {business.stars ?? "-"}</span>
+                    <span>{business.review_count ?? 0} reviews</span>
+                    <span>{business.is_open ? "Open" : "Closed"}</span>
+                  </div>
+                </article>
               </Link>
             ))}
           </div>

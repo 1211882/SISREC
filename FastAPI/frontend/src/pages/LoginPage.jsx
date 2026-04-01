@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
+import { API_BASE, fetchWithTimeout } from "../utils/api";
 
-const API_BASE = "http://127.0.0.1:8000";
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ function LoginPage() {
     setError("");
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
+      const response = await fetchWithTimeout(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

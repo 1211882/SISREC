@@ -37,6 +37,10 @@ function Header() {
     navigate("/");
   }
 
+  const userInitial = authUser
+    ? (authUser.name || authUser.email || "U").trim()[0]?.toUpperCase() || "U"
+    : null;
+
   return (
     <header className="topbar">
       <Link className="brand" to="/">
@@ -44,15 +48,22 @@ function Header() {
       </Link>
 
       <nav className="topbar-nav">
-        <Link className="text-link" to="/restaurants">
+        <Link className="nav-button ghost" to="/restaurants">
           Restaurants
         </Link>
+        {authUser && (
+          <Link className="nav-button ghost" to="/recommendations">
+            Recommendations
+          </Link>
+        )}
         {authUser ? (
           <>
-            <Link className="text-link" to="/profile">
+            <Link className="nav-button ghost" to="/profile">
               Profile
             </Link>
-            <span className="user-pill">Signed in: {authUser.name || authUser.email}</span>
+            <span className="avatar-circle" title={authUser.name || authUser.email}>
+              {userInitial}
+            </span>
             <button className="button ghost" type="button" onClick={logout}>
               Sign out
             </button>

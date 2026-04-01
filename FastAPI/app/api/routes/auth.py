@@ -59,6 +59,26 @@ def serialize_friends(friend_ids: list[str]) -> str:
     return ", ".join(friend_ids)
 
 
+def normalize_category_list(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    normalized = [cat.strip() for cat in raw.split(",") if cat.strip()]
+    unique: list[str] = []
+    for cat in normalized:
+        if cat not in unique:
+            unique.append(cat)
+        if len(unique) >= 20:
+            break
+    return unique
+
+
+def serialize_categories(categories: list[str] | None) -> str | None:
+    if not categories:
+        return None
+
+    return ", ".join(categories)
+
+
 def get_auth_and_dataset_user(session, auth_user_id: int):
     auth_user = session.query(AuthUser).filter(AuthUser.id == auth_user_id).first()
     if not auth_user:
@@ -336,8 +356,8 @@ def update_preferences(auth_user_id: int, payload: PreferencesRequest):
         )
 
         normalized_city = payload.preferred_city.strip() if payload.preferred_city else None
-        normalized_categories = (
-            payload.preferred_categories.strip() if payload.preferred_categories else None
+        normalized_categories = serialize_categories(
+            normalize_category_list(payload.preferred_categories)
         )
 
         if not prefs:

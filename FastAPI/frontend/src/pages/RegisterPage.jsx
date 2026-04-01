@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE, fetchWithTimeout } from "../utils/api";
 
-const API_BASE = "http://127.0.0.1:8000";
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -20,7 +20,7 @@ function RegisterPage() {
     setSuccess("");
 
     try {
-      const response = await fetch(`${API_BASE}/auth/register`, {
+      const response = await fetchWithTimeout(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

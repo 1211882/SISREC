@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, Float, Text, ForeignKey
+from sqlalchemy import String, Integer, Float, Text, Boolean, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database.base import Base
 
@@ -15,6 +15,7 @@ class Review(Base):
     )
 
     stars: Mapped[float | None] = mapped_column(Float, nullable=True)
+    recommend: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     useful: Mapped[int] = mapped_column(Integer, default=0)
     funny: Mapped[int] = mapped_column(Integer, default=0)
     cool: Mapped[int] = mapped_column(Integer, default=0)

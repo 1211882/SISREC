@@ -3,6 +3,7 @@ import Header from "./components/Header";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import RecommendationsPage from "./pages/RecommendationsPage";
 import RegisterPage from "./pages/RegisterPage";
 import RestaurantDetailPage from "./pages/RestaurantDetailPage";
 import RestaurantsPage from "./pages/RestaurantsPage";
@@ -16,6 +17,7 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/restaurants" element={<RestaurantsPage />} />
           <Route path="/restaurants/:businessId" element={<RestaurantDetailPage />} />
+          <Route path="/recommendations" element={<RecommendationsPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/profile" element={<ProfilePage />} />

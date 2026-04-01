@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { API_BASE, fetchWithTimeout } from "../utils/api";
 
 function StarRating({ value }) {
   const safeValue = typeof value === "number" ? value : 0;
@@ -33,7 +34,17 @@ function StarRating({ value }) {
 }
 
 function HomePage() {
-  const isLoggedIn = Boolean(localStorage.getItem("auth_user"));
+  const authUser = useMemo(() => {
+    const raw = localStorage.getItem("auth_user");
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const isLoggedIn = Boolean(authUser?.id);
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -41,7 +52,7 @@ function HomePage() {
   useEffect(() => {
     if (isLoggedIn) return;
 
-    fetch("http://127.0.0.1:8000/recommendations?limit=6")
+    fetchWithTimeout(`${API_BASE}/recommendations?limit=6`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch recommendations");
         return res.json();
@@ -51,23 +62,30 @@ function HomePage() {
       .finally(() => setLoading(false));
   }, [isLoggedIn]);
 
+  // ── Logged-in view ────────────────────────────────────────────
   if (isLoggedIn) {
     return (
-      <section className="hero-panel">
-        <div className="hero-copy">
-          <p className="eyebrow">Welcome back</p>
-          <h1>Your personalized recommendations</h1>
+      <section className="hero-panel hero-panel--wide">
+        <div className="hero-copy hero-copy--wide">
+          <p className="eyebrow">Welcome back, {authUser.name}</p>
+          <h1>What would you like to do today?</h1>
           <p className="lead">
-            Personalized suggestions based on your profile will be available soon.
+            Explore restaurants, view your personalized recommendations, or predict your rating for any restaurant.
           </p>
-          <Link className="button solid cta" to="/restaurants">
-            Browse all restaurants
-          </Link>
+          <div className="hero-actions">
+            <Link className="button solid cta" to="/restaurants">
+              Restaurants
+            </Link>
+            <Link className="button solid" to="/recommendations">
+              My recommendations
+            </Link>
+          </div>
         </div>
       </section>
     );
   }
 
+  // ── Guest view ────────────────────────────────────────────────
   return (
     <section className="hero-panel">
       <div className="hero-copy">
