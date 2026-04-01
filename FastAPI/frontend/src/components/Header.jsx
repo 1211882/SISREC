@@ -1,8 +1,9 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 
 function Header() {
   const [authUser, setAuthUser] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     function syncAuthUser() {
@@ -33,6 +34,7 @@ function Header() {
     localStorage.removeItem("auth_user");
     setAuthUser(null);
     window.dispatchEvent(new Event("auth-changed"));
+    navigate("/");
   }
 
   return (

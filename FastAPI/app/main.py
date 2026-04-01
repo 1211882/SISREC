@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import auth
 from app.api.routes import businesses
+from app.api.routes import recomendations
 from app.api.routes import reviews
 from app.api.routes import users
 from app.database.base import Base
@@ -36,4 +37,5 @@ def startup_create_tables():
 app.include_router(reviews.router)
 app.include_router(users.router)
 app.include_router(businesses.router)
+app.include_router(recomendations.router)
 app.include_router(auth.router)
