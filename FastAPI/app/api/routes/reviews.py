@@ -11,6 +11,7 @@ from app.models.user import User
 from app.models.review import Review
 from app.models.auth_user_dataset_link import AuthUserDatasetLink
 from app.models.auth_user_preference import AuthUserPreference
+from app.api.routes.recomendations import invalidate_recommendation_cache
 
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
@@ -208,10 +209,12 @@ def create_review(payload: ReviewCreateRequest):
 			previous_stars,
 		)
 		session.commit()
+		invalidate_recommendation_cache()
 
 		return {
 			"review_id": review.review_id,
 			"user_id": review.user_id,
+			"user_name": user.name,
 			"business_id": review.business_id,
 			"stars": review.stars,
 			"review_count": business.review_count,
@@ -227,7 +230,8 @@ def create_review(payload: ReviewCreateRequest):
 @router.get("/business/{business_id}")
 def get_business_reviews(
 	business_id: str,
-	limit: int = Query(default=10, ge=1, le=50),
+	limit: int = Query(default=5, ge=1, le=50),
+	offset: int = Query(default=0, ge=0),
 ):
 	session = SessionLocal()
 	try:
@@ -239,24 +243,41 @@ def get_business_reviews(
 		if not business:
 			raise HTTPException(status_code=404, detail="Restaurant not found.")
 
+		total = session.query(Review).filter(Review.business_id == business_id).count()
+
 		reviews = (
-			session.query(Review)
+			session.query(Review, User.name)
+			.outerjoin(User, User.user_id == Review.user_id)
 			.filter(Review.business_id == business_id)
 			.order_by(Review.date.desc())
+			.offset(offset)
 			.limit(limit)
 			.all()
 		)
 
-		return [
+		items = [
 			{
 				"review_id": review.review_id,
 				"user_id": review.user_id,
+				"user_name": user_name or review.user_id,
 				"stars": review.stars,
 				"recommend": review.recommend,
 				"text": review.text,
 				"date": review.date,
 			}
-			for review in reviews
+			for review, user_name in reviews
 		]
+
+		page = (offset // limit) + 1 if limit else 1
+		pages = ((total + limit - 1) // limit) if limit else 1
+
+		return {
+			"items": items,
+			"total": total,
+			"limit": limit,
+			"offset": offset,
+			"page": page,
+			"pages": pages,
+		}
 	finally:
 		session.close()

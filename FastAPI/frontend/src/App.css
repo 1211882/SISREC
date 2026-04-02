@@ -365,6 +365,20 @@ body {
   gap: 8px;
 }
 
+.paging-footer {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.paging-status {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 .restaurant-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

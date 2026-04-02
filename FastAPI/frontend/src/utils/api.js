@@ -1,5 +1,5 @@
 export const API_BASE = "http://127.0.0.1:8000";
-const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 
 export async function fetchWithTimeout(url, options = {}, timeout = DEFAULT_REQUEST_TIMEOUT_MS) {
     const controller = new AbortController();

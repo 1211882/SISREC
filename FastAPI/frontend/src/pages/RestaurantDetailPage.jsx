@@ -64,6 +64,7 @@ function formatHourRange(rawRange) {
 }
 
 function RestaurantDetailPage() {
+  const REVIEWS_PAGE_SIZE = 5;
   const { businessId } = useParams();
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -77,6 +78,8 @@ function RestaurantDetailPage() {
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsError, setReviewsError] = useState("");
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsTotal, setReviewsTotal] = useState(0);
 
   const authUser = useMemo(() => {
     const raw = localStorage.getItem("auth_user");
@@ -135,18 +138,27 @@ function RestaurantDetailPage() {
   }, [businessId]);
 
   useEffect(() => {
+    setReviewsPage(1);
+  }, [businessId]);
+
+  useEffect(() => {
     async function fetchReviews() {
       if (!businessId) return;
       setReviewsLoading(true);
       setReviewsError("");
 
       try {
-        const response = await fetchWithTimeout(`${API_BASE}/reviews/business/${businessId}?limit=20`);
+        const offset = (reviewsPage - 1) * REVIEWS_PAGE_SIZE;
+        const response = await fetchWithTimeout(
+          `${API_BASE}/reviews/business/${businessId}?limit=${REVIEWS_PAGE_SIZE}&offset=${offset}`
+        );
         if (!response.ok) {
           throw new Error("Unable to load reviews.");
         }
         const data = await response.json();
-        setReviews(Array.isArray(data) ? data : []);
+        const items = Array.isArray(data?.items) ? data.items : (Array.isArray(data) ? data : []);
+        setReviews(items);
+        setReviewsTotal(typeof data?.total === "number" ? data.total : items.length);
       } catch (err) {
         setReviewsError(err.message || "Unexpected error.");
       } finally {
@@ -155,7 +167,7 @@ function RestaurantDetailPage() {
     }
 
     fetchReviews();
-  }, [businessId]);
+  }, [businessId, reviewsPage]);
 
   async function submitReview() {
     if (!datasetUserId) {
@@ -199,17 +211,22 @@ function RestaurantDetailPage() {
           stars: data.stars ?? item.stars,
         });
       }
-      setReviews((current) => [
-        {
-          review_id: data.review_id,
-          user_id: data.user_id,
-          stars: data.stars,
-          recommend: data.recommend,
-          text: data.text,
-          date: data.date,
-        },
-        ...current,
-      ]);
+      if (reviewsPage === 1) {
+        setReviews((current) => [
+          {
+            review_id: data.review_id,
+            user_id: data.user_id,
+            user_name: data.user_name,
+            stars: data.stars,
+            recommend: data.recommend,
+            text: data.text,
+            date: data.date,
+          },
+          ...current,
+        ].slice(0, REVIEWS_PAGE_SIZE));
+      } else {
+        setReviewsPage(1);
+      }
     } catch (err) {
       setSubmitError(err.message || "Unexpected error.");
     } finally {
@@ -327,7 +344,7 @@ function RestaurantDetailPage() {
                   {reviews.map((review) => (
                     <div key={review.review_id} className="review-card">
                       <div className="review-card-header">
-                        <strong>{review.user_id}</strong>
+                        <strong>{review.user_name || review.user_id}</strong>
                         <span>{review.stars ?? "-"} ★</span>
                       </div>
                       <p>{review.text || "No comment provided."}</p>
@@ -337,6 +354,29 @@ function RestaurantDetailPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+              {!reviewsLoading && !reviewsError && reviewsTotal > REVIEWS_PAGE_SIZE && (
+                <div className="paging-footer" style={{ marginTop: 12 }}>
+                  <button
+                    className="button ghost"
+                    type="button"
+                    onClick={() => setReviewsPage((page) => Math.max(1, page - 1))}
+                    disabled={reviewsPage <= 1}
+                  >
+                    Previous
+                  </button>
+                  <span className="paging-status">
+                    Page {reviewsPage} of {Math.max(1, Math.ceil(reviewsTotal / REVIEWS_PAGE_SIZE))}
+                  </span>
+                  <button
+                    className="button ghost"
+                    type="button"
+                    onClick={() => setReviewsPage((page) => page + 1)}
+                    disabled={reviewsPage >= Math.max(1, Math.ceil(reviewsTotal / REVIEWS_PAGE_SIZE))}
+                  >
+                    Next
+                  </button>
                 </div>
               )}
             </article>

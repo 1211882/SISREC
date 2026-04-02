@@ -1,4 +1,6 @@
 import math
+import threading
+import time
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import Float, cast, func
 
@@ -12,22 +14,69 @@ from app.models.user import User
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
+_RECOMMENDATION_CACHE_TTL_SECONDS = 30.0
+_recommendation_cache_lock = threading.Lock()
+_recommendation_cache = {
+    "expires_at": 0.0,
+    "ratings": None,
+    "user_ratings": None,
+    "user_norms": None,
+}
 
-def load_ratings(limit: int = 20000):
+
+def load_ratings(limit: int | None = None):
     session = SessionLocal()
     try:
-        rows = (
+        query = (
             session.query(Review.user_id, Review.business_id, Review.stars)
             .filter(Review.stars.isnot(None))
-            .limit(limit)
-            .all()
         )
+        if limit is not None:
+            query = query.limit(limit)
+
+        rows = query.all()
         return [
             {"user": user_id, "item": business_id, "rating": float(stars)}
             for user_id, business_id, stars in rows
         ]
     finally:
         session.close()
+
+
+def invalidate_recommendation_cache():
+    with _recommendation_cache_lock:
+        _recommendation_cache["expires_at"] = 0.0
+        _recommendation_cache["ratings"] = None
+        _recommendation_cache["user_ratings"] = None
+        _recommendation_cache["user_norms"] = None
+
+
+def load_recommendation_data():
+    now = time.monotonic()
+    with _recommendation_cache_lock:
+        if (
+            _recommendation_cache["ratings"] is not None
+            and _recommendation_cache["user_ratings"] is not None
+            and _recommendation_cache["user_norms"] is not None
+            and _recommendation_cache["expires_at"] > now
+        ):
+            return (
+                _recommendation_cache["ratings"],
+                _recommendation_cache["user_ratings"],
+                _recommendation_cache["user_norms"],
+            )
+
+    ratings = load_ratings()
+    user_ratings, _ = build_user_item_maps(ratings)
+    user_norms = compute_user_norms(user_ratings)
+
+    with _recommendation_cache_lock:
+        _recommendation_cache["ratings"] = ratings
+        _recommendation_cache["user_ratings"] = user_ratings
+        _recommendation_cache["user_norms"] = user_norms
+        _recommendation_cache["expires_at"] = time.monotonic() + _RECOMMENDATION_CACHE_TTL_SECONDS
+
+    return ratings, user_ratings, user_norms
 
 
 def build_user_item_maps(ratings):
@@ -98,13 +147,35 @@ def load_business_info(business_ids):
     session = SessionLocal()
     try:
         rows = (
-            session.query(Business.business_id, Business.name, Business.city, Business.state)
+            session.query(
+                Business.business_id,
+                Business.name,
+                Business.city,
+                Business.state,
+                Business.stars,
+                Business.review_count,
+            )
             .filter(Business.business_id.in_(business_ids))
             .all()
         )
-        return {business_id: {"name": name, "city": city, "state": state} for business_id, name, city, state in rows}
+        return {
+            business_id: {
+                "name": name,
+                "city": city,
+                "state": state,
+                "stars": stars,
+                "review_count": review_count,
+            }
+            for business_id, name, city, state, stars, review_count in rows
+        }
     finally:
         session.close()
+
+
+def compute_euclidean_distance(stars: float | None, review_count: int | None, max_review_scale: float) -> float:
+    normalized_stars = (stars or 0.0) / 5.0
+    normalized_reviews = math.log1p(review_count or 0) / max_review_scale if max_review_scale > 0 else 0.0
+    return math.sqrt((1.0 - normalized_stars) ** 2 + (1.0 - normalized_reviews) ** 2)
 
 
 def normalize_category_set(raw: str | None) -> set[str]:
@@ -311,9 +382,7 @@ def get_user_recommendations(
     user_id: str,
     limit: int = Query(default=10, ge=1, le=50),
 ):
-    ratings = load_ratings()
-    user_ratings, _ = build_user_item_maps(ratings)
-    user_norms = compute_user_norms(user_ratings)
+    _, user_ratings, user_norms = load_recommendation_data()
 
     if user_id not in user_ratings:
         if dataset_user_exists(user_id):
@@ -325,17 +394,45 @@ def get_user_recommendations(
 
     predictions = predict_ratings_for_user(user_id, user_ratings, user_norms, limit)
     business_info = load_business_info([prediction["business_id"] for prediction in predictions])
+    max_review_count = max(
+        (info.get("review_count") or 0) for info in business_info.values()
+    ) if business_info else 0
+    max_review_scale = math.log1p(max_review_count) if max_review_count > 0 else 1.0
+    max_distance = math.sqrt(2.0)
 
-    return [
-        {
-            "business_id": prediction["business_id"],
-            "name": business_info.get(prediction["business_id"], {}).get("name"),
-            "city": business_info.get(prediction["business_id"], {}).get("city"),
-            "state": business_info.get(prediction["business_id"], {}).get("state"),
-            "score": prediction["score"],
-        }
-        for prediction in predictions
-    ]
+    results = []
+    for prediction in predictions:
+        business_id = prediction["business_id"]
+        info = business_info.get(business_id, {})
+        distance = compute_euclidean_distance(
+            info.get("stars"),
+            info.get("review_count"),
+            max_review_scale,
+        )
+        euclidean_score = max(0.0, 5.0 * (1.0 - (distance / max_distance)))
+        results.append(
+            {
+                "business_id": business_id,
+                "name": info.get("name"),
+                "city": info.get("city"),
+                "state": info.get("state"),
+                "stars": info.get("stars"),
+                "review_count": info.get("review_count"),
+                "score": round(euclidean_score, 3),
+                "collaborative_score": round(prediction["score"], 3),
+                "euclidean_distance": round(distance, 6),
+            }
+        )
+
+    results.sort(
+        key=lambda entry: (
+            entry.get("euclidean_distance", float("inf")),
+            -(entry.get("stars") or 0.0),
+            -(entry.get("review_count") or 0),
+            -(entry.get("score") or 0.0),
+        )
+    )
+    return results
 
 
 @router.get("/candidates/{user_id}")
@@ -343,9 +440,7 @@ def get_recommendation_candidates(
     user_id: str,
     limit: int = Query(default=100, ge=1, le=200),
 ):
-    ratings = load_ratings()
-    user_ratings, _ = build_user_item_maps(ratings)
-    user_norms = compute_user_norms(user_ratings)
+    _, user_ratings, user_norms = load_recommendation_data()
 
     if user_id not in user_ratings:
         if dataset_user_exists(user_id):
@@ -375,9 +470,7 @@ def get_content_hybrid_recommendations(
     user_id: str,
     limit: int = Query(default=10, ge=1, le=50),
 ):
-    ratings = load_ratings()
-    user_ratings, _ = build_user_item_maps(ratings)
-    user_norms = compute_user_norms(user_ratings)
+    _, user_ratings, user_norms = load_recommendation_data()
 
     if user_id not in user_ratings:
         if dataset_user_exists(user_id):
@@ -412,9 +505,7 @@ def get_profile_hybrid_recommendations(
     user_id: str,
     limit: int = Query(default=10, ge=1, le=50),
 ):
-    ratings = load_ratings()
-    user_ratings, _ = build_user_item_maps(ratings)
-    user_norms = compute_user_norms(user_ratings)
+    _, user_ratings, user_norms = load_recommendation_data()
 
     if user_id not in user_ratings:
         if dataset_user_exists(user_id):
@@ -449,9 +540,7 @@ def get_similar_users(
     user_id: str,
     limit: int = Query(default=10, ge=1, le=50),
 ):
-    ratings = load_ratings()
-    user_ratings, _ = build_user_item_maps(ratings)
-    user_norms = compute_user_norms(user_ratings)
+    _, user_ratings, user_norms = load_recommendation_data()
 
     if user_id not in user_ratings:
         if dataset_user_exists(user_id):
@@ -512,9 +601,7 @@ def get_similar_users(
 
 @router.get("/predict/{user_id}/{business_id}")
 def predict_user_business_rating(user_id: str, business_id: str):
-    ratings = load_ratings()
-    user_ratings, _ = build_user_item_maps(ratings)
-    user_norms = compute_user_norms(user_ratings)
+    _, user_ratings, user_norms = load_recommendation_data()
 
     if user_id not in user_ratings:
         if dataset_user_exists(user_id):

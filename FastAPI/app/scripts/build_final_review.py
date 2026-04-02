@@ -5,13 +5,8 @@ SOURCE_CANDIDATES = [
     Path("data/review.json"),
     Path("data/review_raw.json"),
 ]
-BUSINESS_SOURCE_CANDIDATES = [
-    Path("data/business.json"),
-    Path("data/business_raw.json"),
-]
+USER_FINAL_FILE = Path("data/user_final.json")
 OUTPUT_FILE = Path("data/review_final.json")
-
-LIMIT = 10000
 
 
 def read_json_lines(file_path: Path):
@@ -29,56 +24,48 @@ def find_source_file():
     return None
 
 
-def find_business_source_file():
-    for file_path in BUSINESS_SOURCE_CANDIDATES:
-        if file_path.exists():
-            return file_path
-    return None
-
-
-def load_open_business_ids(file_path: Path):
-    open_ids = set()
-    for business in read_json_lines(file_path):
-        if business.get("is_open") == 1:
-            business_id = business.get("business_id")
-            if business_id:
-                open_ids.add(business_id)
-    return open_ids
+def load_target_user_ids(user_file: Path):
+    user_ids = []
+    seen = set()
+    for record in read_json_lines(user_file):
+        user_id = record.get("user_id")
+        if user_id and user_id not in seen:
+            seen.add(user_id)
+            user_ids.append(user_id)
+    return user_ids, seen
 
 
 def build_final_dataset():
     source_file = find_source_file()
-    business_source_file = find_business_source_file()
 
     if source_file is None:
         print("Erro: não foi encontrado nenhum ficheiro de origem de reviews.")
         print("Coloca um destes ficheiros em data/: review.json ou review_raw.json")
         return
 
-    if business_source_file is None:
-        print("Erro: não foi encontrado nenhum ficheiro de origem de businesses.")
-        print("Coloca um destes ficheiros em data/: business.json ou business_raw.json")
+    if not USER_FINAL_FILE.exists():
+        print("Erro: falta o ficheiro data/user_final.json")
+        print("Corre primeiro: python -m app.scripts.build_final_user")
         return
 
-    print(f"Ficheiro de businesses: {business_source_file}")
-    open_business_ids = load_open_business_ids(business_source_file)
-    print(f"Businesses com is_open = 1: {len(open_business_ids)}")
-
     print(f"Ficheiro de origem: {source_file}")
-    print(f"A selecionar os primeiros {LIMIT} reviews de businesses abertos...")
+    ordered_user_ids, selected_users_set = load_target_user_ids(USER_FINAL_FILE)
+    print(f"Users carregados de user_final.json: {len(ordered_user_ids)}")
+    print("A selecionar todas as reviews dos users em user_final.json (comparação por user_id)...")
 
     selected_records = []
     for record in read_json_lines(source_file):
-        business_id = record.get("business_id")
-        if business_id not in open_business_ids:
+        user_id = record.get("user_id")
+        if user_id not in selected_users_set:
             continue
 
         selected_records.append(record)
-        if len(selected_records) == LIMIT:
-            break
 
     print(f"Registos selecionados: {len(selected_records)}")
     print("A gravar ficheiro final...")
+
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT_FILE.touch(exist_ok=True)
 
     with OUTPUT_FILE.open("w", encoding="utf-8") as f:
         for record in selected_records:

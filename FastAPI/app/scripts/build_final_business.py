@@ -5,8 +5,6 @@ SOURCE_FILE = Path("data/business.json")
 REVIEW_FILE = Path("data/review_final.json")
 OUTPUT_FILE = Path("data/business_final.json")
 
-LIMIT = 10000
-
 
 def read_json_lines(file_path: Path):
 	with file_path.open("r", encoding="utf-8") as f:
@@ -54,10 +52,12 @@ def build_final_dataset():
 			break
 
 	selected_records = [selected_by_id[business_id] for business_id in ordered_business_ids if business_id in selected_by_id]
-	selected_records = selected_records[:LIMIT]
 
 	print(f"Registos selecionados: {len(selected_records)}")
 	print("A gravar ficheiro final...")
+
+	OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+	OUTPUT_FILE.touch(exist_ok=True)
 
 	with OUTPUT_FILE.open("w", encoding="utf-8") as f:
 		for record in selected_records:

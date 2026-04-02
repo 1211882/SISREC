@@ -143,7 +143,9 @@ function RecommendationsPage() {
         const uniqueRestaurantsMap = new Map();
         const categoryRequests = categories.slice(0, 3).map((cat) =>
           fetchWithTimeout(
-            `${API_BASE}/businesses?category=${encodeURIComponent(cat)}&limit=6`
+            `${API_BASE}/businesses?category=${encodeURIComponent(cat)}&sort_by=euclidean&order=asc&limit=12&include_total=false`,
+            {},
+            30000
           )
         );
 
@@ -155,13 +157,51 @@ function RecommendationsPage() {
           if (!res.ok) return;
           const items = Array.isArray(data.items) ? data.items : [];
           items.forEach((item) => {
-            if (!uniqueRestaurantsMap.has(item.business_id)) {
+            const existingItem = uniqueRestaurantsMap.get(item.business_id);
+            if (!existingItem) {
+              uniqueRestaurantsMap.set(item.business_id, item);
+              return;
+            }
+
+            const currentDistance = typeof item.euclidean_distance === "number"
+              ? item.euclidean_distance
+              : Number.POSITIVE_INFINITY;
+            const existingDistance = typeof existingItem.euclidean_distance === "number"
+              ? existingItem.euclidean_distance
+              : Number.POSITIVE_INFINITY;
+
+            if (currentDistance < existingDistance) {
               uniqueRestaurantsMap.set(item.business_id, item);
             }
           });
         });
 
-        setCategoryRestaurants(Array.from(uniqueRestaurantsMap.values()).slice(0, 12));
+        const sortedRestaurants = Array.from(uniqueRestaurantsMap.values())
+          .sort((left, right) => {
+            const leftDistance = typeof left.euclidean_distance === "number"
+              ? left.euclidean_distance
+              : Number.POSITIVE_INFINITY;
+            const rightDistance = typeof right.euclidean_distance === "number"
+              ? right.euclidean_distance
+              : Number.POSITIVE_INFINITY;
+
+            if (leftDistance !== rightDistance) {
+              return leftDistance - rightDistance;
+            }
+
+            const leftStars = typeof left.stars === "number" ? left.stars : 0;
+            const rightStars = typeof right.stars === "number" ? right.stars : 0;
+            if (leftStars !== rightStars) {
+              return rightStars - leftStars;
+            }
+
+            const leftReviews = typeof left.review_count === "number" ? left.review_count : 0;
+            const rightReviews = typeof right.review_count === "number" ? right.review_count : 0;
+            return rightReviews - leftReviews;
+          })
+          .slice(0, 12);
+
+        setCategoryRestaurants(sortedRestaurants);
       } catch (err) {
         setCategoryRestaurantsError(err.message || "Unable to load restaurants for your categories.");
       } finally {
@@ -264,7 +304,7 @@ function RecommendationsPage() {
           <div>
             <h2>My recommendations</h2>
             <p className="block-lead">
-              Restaurants you will likely enjoy, based on users similar to you.
+              Restaurants you will likely enjoy, ordered by Euclidean distance using rating and number of reviews.
             </p>
           </div>
           <button

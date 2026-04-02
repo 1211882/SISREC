@@ -140,22 +140,6 @@ function RestaurantsPage() {
                   <option value="asc">Ascending</option>
                 </select>
               </label>
-              <button
-                className="button ghost"
-                type="button"
-                onClick={goPrevious}
-                disabled={page <= 1}
-              >
-                Previous
-              </button>
-              <button
-                className="button ghost"
-                type="button"
-                onClick={goNext}
-                disabled={page >= pages}
-              >
-                Next
-              </button>
             </div>
           </div>
 
@@ -179,6 +163,26 @@ function RestaurantsPage() {
                 </article>
               </Link>
             ))}
+          </div>
+
+          <div className="paging-footer">
+            <button
+              className="button ghost"
+              type="button"
+              onClick={goPrevious}
+              disabled={page <= 1}
+            >
+              Previous
+            </button>
+            <span className="paging-status">Page {page} of {pages}</span>
+            <button
+              className="button ghost"
+              type="button"
+              onClick={goNext}
+              disabled={page >= pages}
+            >
+              Next
+            </button>
           </div>
         </>
       )}
