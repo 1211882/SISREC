@@ -15,3 +15,9 @@
 4. Arrancar frontend
 cd frontend
 npm run dev
+
+5. 
+`cd C:\ISEP\Projetos\SISREC\FastAPI`
+criar .env
+POSTGRES_URI=postgresql://postgres:DtujlICQk2Jc@vsgate-s1.dei.isep.ipp.pt:10305/postgres
+POSTGRES_DB=postgres
