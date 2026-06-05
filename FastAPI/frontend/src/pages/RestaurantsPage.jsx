@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE, fetchWithTimeout } from "../utils/api";
 
-const PAGE_SIZE = 24;
+const PAGE_SIZE_OPTIONS = [18, 36, 72];
 
 function RestaurantsPage() {
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
+  const [pageSize, setPageSize] = useState(18);
   const [sortBy, setSortBy] = useState("stars");
   const [sortOrder, setSortOrder] = useState("desc");
   const [loading, setLoading] = useState(true);
@@ -17,6 +18,15 @@ function RestaurantsPage() {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [categoriesError, setCategoriesError] = useState(false);
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
 
   useEffect(() => {
     async function loadCategories() {
@@ -44,8 +54,8 @@ function RestaurantsPage() {
       setError("");
 
       try {
-        const offset = (page - 1) * PAGE_SIZE;
-        let url = `${API_BASE}/businesses?limit=${PAGE_SIZE}&offset=${offset}&sort_by=${sortBy}&order=${sortOrder}`;
+        const offset = (page - 1) * pageSize;
+        let url = `${API_BASE}/businesses?limit=${pageSize}&offset=${offset}&sort_by=${sortBy}&order=${sortOrder}`;
         if (selectedCategory) {
           url += `&category=${encodeURIComponent(selectedCategory)}`;
         }
@@ -73,7 +83,7 @@ function RestaurantsPage() {
     }
 
     fetchBusinesses();
-  }, [page, sortBy, sortOrder, selectedCategory]);
+  }, [page, pageSize, sortBy, sortOrder, selectedCategory]);
 
   function goPrevious() {
     setPage((current) => Math.max(1, current - 1));
@@ -93,11 +103,15 @@ function RestaurantsPage() {
     setPage(1);
   }
 
+  function changePageSize(event) {
+    setPageSize(Number(event.target.value));
+    setPage(1);
+  }
+
   return (
-    <section className="list-panel">
+    <section className="list-panel restaurants-page">
       <div className="list-header">
         <h1>Restaurants List</h1>
-        <p>Results loaded from the businesses table.</p>
       </div>
 
       {loading && <p className="state-message">Loading restaurants...</p>}
@@ -106,9 +120,6 @@ function RestaurantsPage() {
       {!loading && !error && (
         <>
           <div className="paging-toolbar">
-            <p className="state-message">
-              Total: {total} restaurants | Page {page} of {pages}
-            </p>
             <div className="paging-actions">
               {categories.length > 0 && (
                 <label className="sort-control">
@@ -175,6 +186,16 @@ function RestaurantsPage() {
               Previous
             </button>
             <span className="paging-status">Page {page} of {pages}</span>
+            <label className="page-size-control" htmlFor="restaurants-page-size">
+              Per page
+              <select id="restaurants-page-size" value={pageSize} onChange={changePageSize}>
+                {PAGE_SIZE_OPTIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               className="button ghost"
               type="button"

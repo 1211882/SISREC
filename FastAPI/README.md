@@ -21,3 +21,20 @@ npm run dev
 criar .env
 POSTGRES_URI=postgresql://postgres:DtujlICQk2Jc@vsgate-s1.dei.isep.ipp.pt:10305/postgres
 POSTGRES_DB=postgres
+
+## Recommendation Endpoints
+
+Base URL local: `http://127.0.0.1:8000`
+
+- Personalized: `/recommendations/user/{user_id}?limit=10&meal_period=auto`
+- Hybrid Full: `/recommendations/hybrid/full/{user_id}?limit=10&meal_period=auto`
+- Global fallback: `/recommendations?limit=10&meal_period=auto`
+
+`meal_period` aceita: `auto`, `lunch`, `dinner`.
+
+## Hybrid Mode Status
+
+Atualmente, apenas o modo híbrido completo está ativo na API e no frontend:
+
+- Ativo: `/recommendations/hybrid/full/{user_id}`
+- Removidos: `/recommendations/hybrid/content/{user_id}` e `/recommendations/hybrid/profile/{user_id}`

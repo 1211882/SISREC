@@ -14,6 +14,7 @@ class AuthUserPreference(Base):
     )
     preferred_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     preferred_categories: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    preferred_price_range: Mapped[int | None] = mapped_column(Integer, nullable=True)
     preferred_star_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     preferred_star_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     use_friends_boost: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

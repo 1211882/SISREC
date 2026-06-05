@@ -27,6 +27,8 @@ function RecommendationsPage() {
   const [myRecsLoaded, setMyRecsLoaded] = useState(false);
   const [myRecsError, setMyRecsError] = useState(null);
   const [myRecsMessage, setMyRecsMessage] = useState(null);
+  const [recMode, setRecMode] = useState("hybrid_full");
+  const [mealPeriod, setMealPeriod] = useState("auto");
 
   // ── Block 2: Similar users ────────────────────────────────────
   const [similarUsers, setSimilarUsers] = useState([]);
@@ -41,6 +43,7 @@ function RecommendationsPage() {
   const [categoryRestaurants, setCategoryRestaurants] = useState([]);
   const [categoryRestaurantsLoading, setCategoryRestaurantsLoading] = useState(false);
   const [categoryRestaurantsError, setCategoryRestaurantsError] = useState(null);
+  const [preferredPriceRange, setPreferredPriceRange] = useState(null);
 
   // ── Block 4: Predict rating ───────────────────────────────────
   const [selectedBusinessId, setSelectedBusinessId] = useState("");
@@ -50,6 +53,19 @@ function RecommendationsPage() {
   const [prediction, setPrediction] = useState(null);
   const [predictionLoading, setPredictionLoading] = useState(false);
   const [predictionError, setPredictionError] = useState(null);
+
+  function getRecommendationModeConfig(mode) {
+    if (mode === "hybrid_full") {
+      return {
+        endpoint: `/recommendations/hybrid/full/${datasetUserId}`,
+        title: "Hybrid Full",
+      };
+    }
+    return {
+      endpoint: `/recommendations/user/${datasetUserId}`,
+      title: "Personalized",
+    };
+  }
 
   async function loadMyRecommendations() {
     if (!datasetUserId) {
@@ -62,8 +78,9 @@ function RecommendationsPage() {
     setMyRecs([]);
 
     try {
+      const modeConfig = getRecommendationModeConfig(recMode);
       const res = await fetchWithTimeout(
-        `${API_BASE}/recommendations/user/${datasetUserId}?limit=10`
+        `${API_BASE}${modeConfig.endpoint}?limit=10&meal_period=${encodeURIComponent(mealPeriod)}`
       );
       const data = await res.json();
 
@@ -71,9 +88,11 @@ function RecommendationsPage() {
         const msg = data?.detail || "Failed to load recommendations.";
         if (msg.toLowerCase().includes("no ratings yet")) {
           setMyRecsMessage(
-            "You don't have enough ratings yet for personalized recommendations. Showing the most popular ones instead."
+            `You don't have enough ratings yet for ${modeConfig.title.toLowerCase()} recommendations. Showing the most popular ones instead.`
           );
-          const fallback = await fetchWithTimeout(`${API_BASE}/recommendations?limit=10`);
+          const fallback = await fetchWithTimeout(
+            `${API_BASE}/recommendations?limit=10&meal_period=${encodeURIComponent(mealPeriod)}`
+          );
           const fallbackData = await fallback.json();
           setMyRecs(Array.isArray(fallbackData) ? fallbackData : []);
           return;
@@ -124,12 +143,12 @@ function RecommendationsPage() {
   useEffect(() => {
     if (!datasetUserId) return;
     loadMyRecommendations();
-  }, [datasetUserId]);
+  }, [datasetUserId, mealPeriod, recMode]);
 
   useEffect(() => {
     if (!authUser?.id) return;
 
-    async function loadCategoryRestaurants(categories) {
+    async function loadCategoryRestaurants(categories, priceRange) {
       setCategoryRestaurantsLoading(true);
       setCategoryRestaurantsError(null);
       setCategoryRestaurants([]);
@@ -143,7 +162,7 @@ function RecommendationsPage() {
         const uniqueRestaurantsMap = new Map();
         const categoryRequests = categories.slice(0, 3).map((cat) =>
           fetchWithTimeout(
-            `${API_BASE}/businesses?category=${encodeURIComponent(cat)}&sort_by=euclidean&order=asc&limit=12&include_total=false`,
+            `${API_BASE}/businesses?category=${encodeURIComponent(cat)}&sort_by=euclidean&order=asc&limit=12&include_total=false${priceRange ? `&price_range=${encodeURIComponent(priceRange)}` : ""}`,
             {},
             30000
           )
@@ -221,8 +240,12 @@ function RecommendationsPage() {
         const categories = data.preferred_categories
           ? data.preferred_categories.split(",").map((cat) => cat.trim()).filter(Boolean)
           : [];
+        const priceRange = Number.isInteger(data.preferred_price_range)
+          ? data.preferred_price_range
+          : null;
         setProfileCategories(categories);
-        await loadCategoryRestaurants(categories);
+        setPreferredPriceRange(priceRange);
+        await loadCategoryRestaurants(categories, priceRange);
       } catch (err) {
         setProfileCategoriesError(err.message || "Unable to load profile categories.");
       } finally {
@@ -304,24 +327,52 @@ function RecommendationsPage() {
           <div>
             <h2>My recommendations</h2>
             <p className="block-lead">
-              Restaurants you will likely enjoy, ordered by Euclidean distance using rating and number of reviews.
+              Restaurants you will likely enjoy. Use the tabs to switch between recommendation strategies without overloading the page.
             </p>
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <button
+                className={recMode === "personalized" ? "button solid" : "button ghost"}
+                type="button"
+                onClick={() => setRecMode("personalized")}
+                disabled={myRecsLoading}
+              >
+                Personalized
+              </button>
+              <button
+                className={recMode === "hybrid_full" ? "button solid" : "button ghost"}
+                type="button"
+                onClick={() => setRecMode("hybrid_full")}
+                disabled={myRecsLoading}
+              >
+                Hybrid Full
+              </button>
+            </div>
           </div>
-          <button
-            className="button solid"
-            type="button"
-            onClick={loadMyRecommendations}
-            disabled={myRecsLoading}
-          >
-            {myRecsLoading ? "Loading..." : "Load recommendations"}
-          </button>
+          <div className="predict-form" style={{ gap: 12, alignItems: "end" }}>
+            <label className="sort-control">
+              Meal period
+              <select value={mealPeriod} onChange={(e) => setMealPeriod(e.target.value)}>
+                <option value="auto">Auto</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+              </select>
+            </label>
+            <button
+              className="button solid"
+              type="button"
+              onClick={loadMyRecommendations}
+              disabled={myRecsLoading}
+            >
+              {myRecsLoading ? "Loading..." : "Load recommendations"}
+            </button>
+          </div>
         </div>
 
         {myRecsMessage && <p className="info-message">{myRecsMessage}</p>}
         {myRecsError && <p className="error-message">{myRecsError}</p>}
 
         {!myRecsLoaded && !myRecsLoading && (
-          <p className="state-message">Click "Load recommendations" to get your personalized list.</p>
+          <p className="state-message">Click "Load recommendations" to load the selected tab list.</p>
         )}
 
         {myRecsLoaded && !myRecsLoading && !myRecsError && myRecs.length === 0 && !myRecsMessage && (
@@ -481,6 +532,9 @@ function RecommendationsPage() {
         {profileCategories.length > 0 && (
           <div style={{ marginTop: 24 }}>
             <h3>Restaurants based on your categories</h3>
+            {preferredPriceRange && (
+              <p className="state-message">Price preference applied: {"$".repeat(preferredPriceRange)}</p>
+            )}
             {categoryRestaurantsLoading && (
               <p className="state-message">Loading restaurants for your favorite categories...</p>
             )}

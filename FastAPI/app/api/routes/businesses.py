@@ -10,6 +10,26 @@ from app.models.business import Business
 router = APIRouter(prefix="/businesses", tags=["businesses"])
 
 
+def build_price_range_filter(price_range: int):
+	return Business.attributes["RestaurantsPriceRange2"].as_string() == str(price_range)
+
+
+def extract_price_range(attributes: dict | None) -> int | None:
+	if not isinstance(attributes, dict):
+		return None
+
+	raw_value = attributes.get("RestaurantsPriceRange2")
+	if raw_value in (None, ""):
+		return None
+
+	try:
+		price_range = int(str(raw_value).strip().strip("'\""))
+	except (TypeError, ValueError):
+		return None
+
+	return price_range if 1 <= price_range <= 4 else None
+
+
 def build_business_payload(business: Business, euclidean_distance: float | None = None):
 	return {
 		"business_id": business.business_id,
@@ -19,6 +39,7 @@ def build_business_payload(business: Business, euclidean_distance: float | None 
 		"stars": business.stars,
 		"review_count": business.review_count,
 		"is_open": business.is_open,
+		"price_range": extract_price_range(business.attributes),
 		"euclidean_distance": round(float(euclidean_distance), 6) if euclidean_distance is not None else None,
 	}
 
@@ -53,6 +74,7 @@ def list_categories(limit: int = 60):
 @router.get("/by-categories")
 def list_businesses_by_categories(
 	categories: str = Query(min_length=1),
+	price_range: int | None = Query(default=None, ge=1, le=4),
 	limit: int = Query(default=12, ge=1, le=50),
 ):
 	category_list = [category.strip() for category in categories.split(",") if category.strip()]
@@ -64,7 +86,10 @@ def list_businesses_by_categories(
 	session = SessionLocal()
 	try:
 		filters = [Business.categories.ilike(f"%{category}%") for category in category_list]
-		businesses = session.query(Business).filter(or_(*filters)).all()
+		query = session.query(Business).filter(or_(*filters))
+		if price_range is not None:
+			query = query.filter(build_price_range_filter(price_range))
+		businesses = query.all()
 
 		if not businesses:
 			return {"items": [], "categories": category_list}
@@ -104,6 +129,7 @@ def list_businesses(
 	order: str = Query(default="asc", pattern="^(asc|desc)$"),
 	category: str | None = Query(default=None),
 	name: str | None = Query(default=None),
+	price_range: int | None = Query(default=None, ge=1, le=4),
 	include_total: bool = Query(default=True),
 ):
 	session = SessionLocal()
@@ -114,6 +140,8 @@ def list_businesses(
 			base_query = base_query.filter(Business.categories.ilike(f"%{category}%"))
 		if name:
 			base_query = base_query.filter(Business.name.ilike(f"%{name}%"))
+		if price_range is not None:
+			base_query = base_query.filter(build_price_range_filter(price_range))
 
 		total = base_query.count() if include_total else None
 
@@ -201,6 +229,7 @@ def get_business_detail(business_id: str):
 			"stars": business.stars,
 			"review_count": business.review_count,
 			"is_open": business.is_open,
+			"price_range": extract_price_range(business.attributes),
 			"categories": business.categories,
 			"attributes": business.attributes,
 			"hours": business.hours,

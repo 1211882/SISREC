@@ -1,4 +1,6 @@
+import ast
 import math
+from datetime import datetime
 import threading
 import time
 from fastapi import APIRouter, HTTPException, Query
@@ -13,6 +15,20 @@ from app.models.user import User
 
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
+
+_MEAL_PERIOD_REFERENCE_HOUR = {
+    "lunch": 13,
+    "dinner": 19,
+}
+_WEEKDAY_NAMES = (
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+)
 
 _RECOMMENDATION_CACHE_TTL_SECONDS = 30.0
 _recommendation_cache_lock = threading.Lock()
@@ -97,6 +113,82 @@ def compute_user_norms(user_ratings):
     }
 
 
+def resolve_meal_period(meal_period: str) -> str:
+    if meal_period in {"lunch", "dinner"}:
+        return meal_period
+
+    current_hour = datetime.now().hour
+    return "lunch" if 11 <= current_hour < 17 else "dinner"
+
+
+def parse_hour_value(raw_value: str | None) -> int | None:
+    if not raw_value:
+        return None
+
+    try:
+        hour_text, minute_text = raw_value.split(":", 1)
+        hour = int(hour_text)
+        minute = int(minute_text)
+    except (ValueError, TypeError):
+        return None
+
+    return hour * 60 + minute
+
+
+def is_open_during_reference_hour(hours: dict | None, meal_period: str) -> bool | None:
+    if not isinstance(hours, dict) or meal_period not in _MEAL_PERIOD_REFERENCE_HOUR:
+        return None
+
+    reference_day = _WEEKDAY_NAMES[datetime.now().weekday()]
+    reference_minutes = _MEAL_PERIOD_REFERENCE_HOUR[meal_period] * 60
+    raw_schedule = hours.get(reference_day)
+    if not raw_schedule:
+        return None
+
+    try:
+        start_text, end_text = raw_schedule.split("-", 1)
+    except ValueError:
+        return None
+
+    start_minutes = parse_hour_value(start_text)
+    end_minutes = parse_hour_value(end_text)
+    if start_minutes is None or end_minutes is None:
+        return None
+
+    if start_minutes == end_minutes == 0:
+        return True
+
+    if start_minutes < end_minutes:
+        return start_minutes <= reference_minutes < end_minutes
+
+    return reference_minutes >= start_minutes or reference_minutes < end_minutes
+
+
+def build_meal_period_score(business_info: dict, meal_period: str) -> float:
+    score = 0.0
+
+    if not business_info:
+        return score
+
+    features = build_business_feature_set(
+        business_info.get("categories"),
+        business_info.get("attributes"),
+    )
+    if f"goodformeal:{meal_period}" in features:
+        score += 1.0
+
+    open_for_period = is_open_during_reference_hour(business_info.get("hours"), meal_period)
+    if open_for_period is True:
+        score += 0.5
+    elif open_for_period is False:
+        score -= 0.5
+
+    if business_info.get("is_open") is False:
+        score -= 0.25
+
+    return score
+
+
 def cosine_similarity(user_ratings_a, user_ratings_b, norm_a, norm_b):
     common_items = set(user_ratings_a).intersection(user_ratings_b)
     if not common_items or norm_a == 0 or norm_b == 0:
@@ -154,6 +246,10 @@ def load_business_info(business_ids):
                 Business.state,
                 Business.stars,
                 Business.review_count,
+                Business.is_open,
+                Business.categories,
+                Business.attributes,
+                Business.hours,
             )
             .filter(Business.business_id.in_(business_ids))
             .all()
@@ -165,8 +261,12 @@ def load_business_info(business_ids):
                 "state": state,
                 "stars": stars,
                 "review_count": review_count,
+                "is_open": is_open,
+                "categories": categories,
+                "attributes": attributes,
+                "hours": hours,
             }
-            for business_id, name, city, state, stars, review_count in rows
+            for business_id, name, city, state, stars, review_count, is_open, categories, attributes, hours in rows
         }
     finally:
         session.close()
@@ -195,6 +295,24 @@ def build_business_feature_set(categories: str | None, attributes: dict | None) 
                 value_text = value.strip().lower()
                 if value_text:
                     features.add(f"{key_text}:{value_text}")
+                if value_text.startswith("{") and value_text.endswith("}"):
+                    try:
+                        nested_value = ast.literal_eval(value)
+                    except (ValueError, SyntaxError):
+                        nested_value = None
+                    if isinstance(nested_value, dict):
+                        for nested_key, nested_item in nested_value.items():
+                            nested_key_text = str(nested_key).strip().lower()
+                            if not nested_key_text:
+                                continue
+                            if nested_item is True:
+                                features.add(f"{key_text}:{nested_key_text}")
+                            elif isinstance(nested_item, str):
+                                nested_item_text = nested_item.strip().lower()
+                                if nested_item_text:
+                                    features.add(f"{key_text}:{nested_key_text}:{nested_item_text}")
+                            elif nested_item is not None:
+                                features.add(f"{key_text}:{nested_key_text}:{str(nested_item).strip().lower()}")
             elif value is not None:
                 features.add(str(value).strip().lower())
     return features
@@ -245,7 +363,12 @@ def load_user_profile_categories(dataset_user_id: str) -> set[str]:
         session.close()
 
 
-def combine_content_and_collaborative_scores(predictions, user_ratings, target_rated_ids):
+def combine_full_hybrid_scores(
+    predictions,
+    user_ratings,
+    target_rated_ids,
+    profile_categories: set[str],
+):
     candidate_ids = [prediction["business_id"] for prediction in predictions]
     rated_ids = list(target_rated_ids)
     feature_ids = set(candidate_ids) | set(rated_ids)
@@ -275,29 +398,20 @@ def combine_content_and_collaborative_scores(predictions, user_ratings, target_r
     for prediction in predictions:
         business_id = prediction["business_id"]
         coll_score = prediction["score"]
+
         content_score = 0.0
         if content_weights.get(business_id, 0.0) > 0:
             content_score = content_scores[business_id] / content_weights[business_id]
-        hybrid_score = (0.7 * coll_score) + (0.3 * content_score)
-        hybrid.append({"business_id": business_id, "score": hybrid_score})
 
-    hybrid.sort(key=lambda entry: entry["score"], reverse=True)
-    return hybrid
-
-
-def combine_profile_and_collaborative_scores(predictions, profile_categories: set[str]):
-    hybrid = []
-    for prediction in predictions:
-        business_id = prediction["business_id"]
-        coll_score = prediction["score"]
         profile_score = 0.0
         if profile_categories:
-            business_features = load_business_feature_sets([business_id]).get(business_id, set())
-            matched = profile_categories.intersection(business_features)
+            candidate_features = business_features.get(business_id, set())
+            matched = profile_categories.intersection(candidate_features)
             profile_match = len(matched) / len(profile_categories)
             profile_score = 1.0 + 4.0 * profile_match
-        hybrid_score = (0.7 * coll_score) + (0.3 * profile_score)
-        hybrid.append({"business_id": business_id, "score": hybrid_score})
+
+        full_score = (0.6 * coll_score) + (0.25 * content_score) + (0.15 * profile_score)
+        hybrid.append({"business_id": business_id, "score": full_score})
 
     hybrid.sort(key=lambda entry: entry["score"], reverse=True)
     return hybrid
@@ -315,6 +429,7 @@ def dataset_user_exists(user_id: str) -> bool:
 def get_recommendations(
     limit: int = Query(default=10, ge=1, le=50),
     min_reviews_weight: int = Query(default=50, ge=1, le=1000),
+    meal_period: str = Query(default="auto", pattern="^(auto|lunch|dinner)$"),
 ):
     """
     Non-personalized recommender using Bayesian weighted rating:
@@ -360,8 +475,10 @@ def get_recommendations(
             .all()
         )
 
-        return [
-            {
+        resolved_meal_period = resolve_meal_period(meal_period)
+        payloads = []
+        for business, score in results:
+            business_info = {
                 "business_id": business.business_id,
                 "name": business.name,
                 "city": business.city,
@@ -369,10 +486,27 @@ def get_recommendations(
                 "categories": business.categories,
                 "stars": business.stars,
                 "review_count": business.review_count,
+                "is_open": business.is_open,
+                "attributes": business.attributes,
+                "hours": business.hours,
                 "ranking_score": round(float(score), 4),
             }
-            for business, score in results
-        ]
+            business_info["meal_match_score"] = round(
+                build_meal_period_score(business_info, resolved_meal_period),
+                4,
+            )
+            business_info["meal_period"] = resolved_meal_period
+            payloads.append(business_info)
+
+        payloads.sort(
+            key=lambda entry: (
+                -(entry.get("meal_match_score") or 0.0),
+                -(entry.get("ranking_score") or 0.0),
+                -(entry.get("review_count") or 0),
+                -(entry.get("stars") or 0.0),
+            )
+        )
+        return payloads
     finally:
         session.close()
 
@@ -381,6 +515,7 @@ def get_recommendations(
 def get_user_recommendations(
     user_id: str,
     limit: int = Query(default=10, ge=1, le=50),
+    meal_period: str = Query(default="auto", pattern="^(auto|lunch|dinner)$"),
 ):
     _, user_ratings, user_norms = load_recommendation_data()
 
@@ -394,6 +529,7 @@ def get_user_recommendations(
 
     predictions = predict_ratings_for_user(user_id, user_ratings, user_norms, limit)
     business_info = load_business_info([prediction["business_id"] for prediction in predictions])
+    resolved_meal_period = resolve_meal_period(meal_period)
     max_review_count = max(
         (info.get("review_count") or 0) for info in business_info.values()
     ) if business_info else 0
@@ -418,14 +554,18 @@ def get_user_recommendations(
                 "state": info.get("state"),
                 "stars": info.get("stars"),
                 "review_count": info.get("review_count"),
+                "is_open": info.get("is_open"),
                 "score": round(euclidean_score, 3),
                 "collaborative_score": round(prediction["score"], 3),
                 "euclidean_distance": round(distance, 6),
+                "meal_match_score": round(build_meal_period_score(info, resolved_meal_period), 4),
+                "meal_period": resolved_meal_period,
             }
         )
 
     results.sort(
         key=lambda entry: (
+            -(entry.get("meal_match_score") or 0.0),
             entry.get("euclidean_distance", float("inf")),
             -(entry.get("stars") or 0.0),
             -(entry.get("review_count") or 0),
@@ -465,45 +605,11 @@ def get_recommendation_candidates(
     ]
 
 
-@router.get("/hybrid/content/{user_id}")
-def get_content_hybrid_recommendations(
+@router.get("/hybrid/full/{user_id}")
+def get_full_hybrid_recommendations(
     user_id: str,
     limit: int = Query(default=10, ge=1, le=50),
-):
-    _, user_ratings, user_norms = load_recommendation_data()
-
-    if user_id not in user_ratings:
-        if dataset_user_exists(user_id):
-            raise HTTPException(
-                status_code=400,
-                detail=f"User '{user_id}' exists in the dataset but has no ratings yet.",
-            )
-        raise HTTPException(status_code=404, detail=f"User '{user_id}' not found")
-
-    predictions = predict_ratings_for_user(user_id, user_ratings, user_norms, limit)
-    hybrid_predictions = combine_content_and_collaborative_scores(
-        predictions,
-        user_ratings,
-        user_ratings[user_id],
-    )
-    business_info = load_business_info([prediction["business_id"] for prediction in hybrid_predictions])
-
-    return [
-        {
-            "business_id": prediction["business_id"],
-            "name": business_info.get(prediction["business_id"], {}).get("name"),
-            "city": business_info.get(prediction["business_id"], {}).get("city"),
-            "state": business_info.get(prediction["business_id"], {}).get("state"),
-            "score": prediction["score"],
-        }
-        for prediction in hybrid_predictions
-    ]
-
-
-@router.get("/hybrid/profile/{user_id}")
-def get_profile_hybrid_recommendations(
-    user_id: str,
-    limit: int = Query(default=10, ge=1, le=50),
+    meal_period: str = Query(default="auto", pattern="^(auto|lunch|dinner)$"),
 ):
     _, user_ratings, user_norms = load_recommendation_data()
 
@@ -517,22 +623,37 @@ def get_profile_hybrid_recommendations(
 
     profile_categories = load_user_profile_categories(user_id)
     predictions = predict_ratings_for_user(user_id, user_ratings, user_norms, limit)
-    hybrid_predictions = combine_profile_and_collaborative_scores(
+    hybrid_predictions = combine_full_hybrid_scores(
         predictions,
+        user_ratings,
+        user_ratings[user_id],
         profile_categories,
     )
     business_info = load_business_info([prediction["business_id"] for prediction in hybrid_predictions])
+    resolved_meal_period = resolve_meal_period(meal_period)
 
-    return [
-        {
-            "business_id": prediction["business_id"],
-            "name": business_info.get(prediction["business_id"], {}).get("name"),
-            "city": business_info.get(prediction["business_id"], {}).get("city"),
-            "state": business_info.get(prediction["business_id"], {}).get("state"),
-            "score": prediction["score"],
-        }
-        for prediction in hybrid_predictions
-    ]
+    results = []
+    for prediction in hybrid_predictions:
+        info = business_info.get(prediction["business_id"], {})
+        results.append(
+            {
+                "business_id": prediction["business_id"],
+                "name": info.get("name"),
+                "city": info.get("city"),
+                "state": info.get("state"),
+                "score": prediction["score"],
+                "meal_match_score": round(build_meal_period_score(info, resolved_meal_period), 4),
+                "meal_period": resolved_meal_period,
+            }
+        )
+
+    results.sort(
+        key=lambda entry: (
+            -(entry.get("meal_match_score") or 0.0),
+            -(entry.get("score") or 0.0),
+        )
+    )
+    return results
 
 
 @router.get("/similar-users/{user_id}")

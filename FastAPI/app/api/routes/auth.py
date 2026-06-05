@@ -35,6 +35,7 @@ class LinkDatasetUserRequest(BaseModel):
 class PreferencesRequest(BaseModel):
     preferred_city: str | None = Field(default=None, max_length=100)
     preferred_categories: str | None = Field(default=None, max_length=1000)
+    preferred_price_range: int | None = Field(default=None, ge=1, le=4)
     preferred_star_min: float | None = Field(default=None, ge=0, le=5)
     preferred_star_max: float | None = Field(default=None, ge=0, le=5)
     use_friends_boost: bool = True
@@ -294,6 +295,7 @@ def get_preferences(auth_user_id: int):
                 "auth_user_id": auth_user_id,
                 "preferred_city": None,
                 "preferred_categories": None,
+                "preferred_price_range": None,
                 "preferred_star_min": None,
                 "preferred_star_max": None,
                 "use_friends_boost": True,
@@ -303,6 +305,7 @@ def get_preferences(auth_user_id: int):
             "auth_user_id": auth_user_id,
             "preferred_city": prefs.preferred_city,
             "preferred_categories": prefs.preferred_categories,
+            "preferred_price_range": prefs.preferred_price_range,
             "preferred_star_min": prefs.preferred_star_min,
             "preferred_star_max": prefs.preferred_star_max,
             "use_friends_boost": prefs.use_friends_boost,
@@ -345,6 +348,7 @@ def update_preferences(auth_user_id: int, payload: PreferencesRequest):
                 auth_user_id=auth_user_id,
                 preferred_city=normalized_city,
                 preferred_categories=normalized_categories,
+                preferred_price_range=payload.preferred_price_range,
                 preferred_star_min=payload.preferred_star_min,
                 preferred_star_max=payload.preferred_star_max,
                 use_friends_boost=payload.use_friends_boost,
@@ -353,6 +357,7 @@ def update_preferences(auth_user_id: int, payload: PreferencesRequest):
         else:
             prefs.preferred_city = normalized_city
             prefs.preferred_categories = normalized_categories
+            prefs.preferred_price_range = payload.preferred_price_range
             prefs.preferred_star_min = payload.preferred_star_min
             prefs.preferred_star_max = payload.preferred_star_max
             prefs.use_friends_boost = payload.use_friends_boost
@@ -363,6 +368,7 @@ def update_preferences(auth_user_id: int, payload: PreferencesRequest):
             "auth_user_id": auth_user_id,
             "preferred_city": prefs.preferred_city,
             "preferred_categories": prefs.preferred_categories,
+            "preferred_price_range": prefs.preferred_price_range,
             "preferred_star_min": prefs.preferred_star_min,
             "preferred_star_max": prefs.preferred_star_max,
             "use_friends_boost": prefs.use_friends_boost,

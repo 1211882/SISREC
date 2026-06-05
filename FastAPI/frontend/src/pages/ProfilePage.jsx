@@ -33,6 +33,20 @@ function ProfilePage() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [categoryToAdd, setCategoryToAdd] = useState("");
   const [savingCategories, setSavingCategories] = useState(false);
+  const [priceRangeInput, setPriceRangeInput] = useState("");
+  const [savingPriceRange, setSavingPriceRange] = useState(false);
+
+  function buildPreferencesPayload(overrides = {}) {
+    return {
+      preferred_city: preferences?.preferred_city ?? null,
+      preferred_categories: selectedCategories.length > 0 ? selectedCategories.join(", ") : null,
+      preferred_price_range: preferences?.preferred_price_range ?? null,
+      preferred_star_min: preferences?.preferred_star_min ?? null,
+      preferred_star_max: preferences?.preferred_star_max ?? null,
+      use_friends_boost: preferences?.use_friends_boost ?? true,
+      ...overrides,
+    };
+  }
 
   async function loadProfile() {
     if (!authUser?.id) {
@@ -70,6 +84,7 @@ function ProfilePage() {
           ? data.preferred_categories.split(",").map((cat) => cat.trim()).filter(Boolean)
           : [];
         setSelectedCategories(cats);
+        setPriceRangeInput(data.preferred_price_range ? String(data.preferred_price_range) : "");
       }
     } catch {
       // ignore
@@ -204,17 +219,14 @@ function ProfilePage() {
       const res = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/preferences`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          preferred_city: preferences?.preferred_city || null,
+        body: JSON.stringify(buildPreferencesPayload({
           preferred_categories: updated.length > 0 ? updated.join(", ") : null,
-          preferred_star_min: preferences?.preferred_star_min || null,
-          preferred_star_max: preferences?.preferred_star_max || null,
-          use_friends_boost: preferences?.use_friends_boost ?? true,
-        }),
+        })),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Failed to save categories.");
       setPreferences(data);
+      setPriceRangeInput(data.preferred_price_range ? String(data.preferred_price_range) : "");
       setSuccessMessage("Categories updated successfully.");
     } catch (err) {
       setError(err.message || "Failed to save categories.");
@@ -240,6 +252,32 @@ function ProfilePage() {
     const updated = selectedCategories.filter((c) => c !== cat);
     setSelectedCategories(updated);
     saveCategories(updated);
+  }
+
+  async function savePriceRange(event) {
+    event.preventDefault();
+    setSavingPriceRange(true);
+    setError("");
+    setSuccessMessage("");
+
+    try {
+      const res = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/preferences`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPreferencesPayload({
+          preferred_price_range: priceRangeInput ? Number(priceRangeInput) : null,
+        })),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to save price range.");
+      setPreferences(data);
+      setPriceRangeInput(data.preferred_price_range ? String(data.preferred_price_range) : "");
+      setSuccessMessage("Price range updated successfully.");
+    } catch (err) {
+      setError(err.message || "Failed to save price range.");
+    } finally {
+      setSavingPriceRange(false);
+    }
   }
 
   return (
@@ -330,6 +368,33 @@ function ProfilePage() {
                 {savingCategories ? "Saving..." : "Add"}
               </button>
             </div>
+          </section>
+
+          <section className="categories-section">
+            <h3>Preferred price range</h3>
+            <p className="state-message" style={{ marginBottom: 10 }}>
+              Choose the price band you want the category-based suggestions to favor.
+            </p>
+
+            <form className="auth-form" onSubmit={savePriceRange}>
+              <label>
+                Price range
+                <select
+                  value={priceRangeInput}
+                  onChange={(e) => setPriceRangeInput(e.target.value)}
+                  disabled={savingPriceRange}
+                >
+                  <option value="">No preference</option>
+                  <option value="1">$ - Budget</option>
+                  <option value="2">$$ - Moderate</option>
+                  <option value="3">$$$ - Expensive</option>
+                  <option value="4">$$$$ - Premium</option>
+                </select>
+              </label>
+              <button className="button solid" type="submit" disabled={savingPriceRange}>
+                {savingPriceRange ? "Saving..." : "Save price range"}
+              </button>
+            </form>
           </section>
 
           <div className="profile-forms">

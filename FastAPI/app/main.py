@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 
 from app.api.routes import auth
 from app.api.routes import businesses
@@ -32,6 +33,21 @@ def root():
 @app.on_event("startup")
 def startup_create_tables():
 	Base.metadata.create_all(bind=engine)
+	inspector = inspect(engine)
+	if not inspector.has_table("auth_user_preferences"):
+		return
+
+	columns = {column["name"] for column in inspector.get_columns("auth_user_preferences")}
+	if "preferred_price_range" in columns:
+		return
+
+	with engine.begin() as connection:
+		connection.execute(
+			text(
+				"ALTER TABLE auth_user_preferences "
+				"ADD COLUMN IF NOT EXISTS preferred_price_range INTEGER"
+			)
+		)
 
 
 app.include_router(reviews.router)
