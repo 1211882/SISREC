@@ -34,7 +34,7 @@ function Header() {
   function logout() {
     clearAuth();
     setAuthUser(null);
-    navigate("/");
+    navigate("/", { replace: true });
   }
 
   const userInitial = authUser

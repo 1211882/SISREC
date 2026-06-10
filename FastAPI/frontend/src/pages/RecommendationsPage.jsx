@@ -258,7 +258,11 @@ function RecommendationsPage() {
         );
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(data?.detail || "Unable to load prediction candidates.");
+          const detail = data?.detail || "Unable to load prediction candidates.";
+          if (String(detail).toLowerCase().includes("no ratings yet")) {
+            throw new Error("You can only predict a rating after you have reviews.");
+          }
+          throw new Error(detail);
         }
 
         const items = Array.isArray(data) ? data : [];
@@ -297,7 +301,13 @@ function RecommendationsPage() {
         `${API_BASE}/recommendations/predict/${datasetUserId}/${encodeURIComponent(selectedBusinessId)}`
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Failed to predict rating.");
+      if (!res.ok) {
+        const detail = data?.detail || "Failed to predict rating.";
+        if (String(detail).toLowerCase().includes("no ratings yet")) {
+          throw new Error("You can only predict a rating after you have reviews.");
+        }
+        throw new Error(detail);
+      }
       setPrediction({ ...data, business_name: selectedBusiness?.name });
     } catch (err) {
       setPredictionError(err.message || "Unexpected error.");

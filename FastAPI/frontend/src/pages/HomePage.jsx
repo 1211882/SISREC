@@ -87,7 +87,7 @@ function HomePage() {
 
   // ── Guest view ────────────────────────────────────────────────
   return (
-    <section className="hero-panel">
+    <section className="hero-panel hero-panel--wide">
       <div className="hero-copy">
         <p className="eyebrow">Welcome to SISREC</p>
         <h1>Top recommended restaurants</h1>
@@ -100,7 +100,7 @@ function HomePage() {
         </Link>
       </div>
 
-      <div className="recommendation-grid">
+      <div className="recommendation-grid" style={{ marginTop: 24 }}>
         {loading && (
           <p style={{ color: "var(--muted)" }}>Loading recommendations…</p>
         )}
