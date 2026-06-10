@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
-import { API_BASE, fetchWithTimeout } from "../utils/api";
+import { API_BASE, authFetch, fetchWithTimeout, getAuthUser } from "../utils/api";
 
 
 function isTruthyAttribute(value) {
@@ -81,16 +81,7 @@ function RestaurantDetailPage() {
   const [reviewsPage, setReviewsPage] = useState(1);
   const [reviewsTotal, setReviewsTotal] = useState(0);
 
-  const authUser = useMemo(() => {
-    const raw = localStorage.getItem("auth_user");
-    if (!raw) return null;
-
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }, []);
+  const authUser = useMemo(() => getAuthUser(), []);
 
   const datasetUserId = authUser?.dataset_user_id || null;
   const activeAttributes = item?.attributes && typeof item.attributes === "object"
@@ -180,13 +171,12 @@ function RestaurantDetailPage() {
     setSubmitting(true);
 
     try {
-      const response = await fetchWithTimeout(`${API_BASE}/reviews`, {
+      const response = await authFetch(`${API_BASE}/reviews`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          user_id: datasetUserId,
           business_id: businessId,
           stars: rating,
           text: comment.trim() || null,

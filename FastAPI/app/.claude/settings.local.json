@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"C:\\\\Users\\\\Aoazevedo\\\\Desktop\\\\FastAPI\")",
+      "Bash(py -c ' *)",
+      "Bash(py _run_notebook.py)",
+      "Bash(py -m pip install pytest)",
+      "Bash(py -c \"import pytest; print\\('pytest', pytest.__version__\\)\")",
+      "Bash(rm -f _build_notebook.py _run_notebook.py)",
+      "Bash(py -m pytest tests/ -q)"
+    ]
+  }
+}

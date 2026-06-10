@@ -2,9 +2,11 @@ import hashlib
 import os
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.api.deps import CurrentUser, ensure_owns_auth_account, get_current_user
+from app.core.security import create_access_token
 from app.database.session import SessionLocal
 from app.models.auth_user import AuthUser
 from app.models.auth_user_dataset_link import AuthUserDatasetLink
@@ -20,6 +22,10 @@ class RegisterRequest(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     email: str = Field(min_length=5, max_length=255)
     password: str = Field(min_length=8, max_length=128)
+    # Optional cold-start survey: collected at registration to seed the profile.
+    preferred_categories: str | None = Field(default=None, max_length=1000)
+    preferred_city: str | None = Field(default=None, max_length=100)
+    preferred_price_range: int | None = Field(default=None, ge=1, le=4)
 
 
 class LoginRequest(BaseModel):
@@ -153,16 +159,38 @@ def register(payload: RegisterRequest):
             )
         )
 
+        # Cold-start survey: seed preferences from registration when provided.
+        normalized_categories = (
+            payload.preferred_categories.strip() if payload.preferred_categories else None
+        )
+        normalized_city = payload.preferred_city.strip() if payload.preferred_city else None
+        if normalized_categories or normalized_city or payload.preferred_price_range:
+            session.add(
+                AuthUserPreference(
+                    auth_user_id=new_user.id,
+                    preferred_categories=normalized_categories,
+                    preferred_city=normalized_city,
+                    preferred_price_range=payload.preferred_price_range,
+                    use_friends_boost=True,
+                )
+            )
+
         session.commit()
         session.refresh(new_user)
 
+        token = create_access_token(new_user.id, dataset_user_id)
         return {
             "id": new_user.id,
             "name": new_user.name,
             "email": new_user.email,
             "dataset_user_id": dataset_user_id,
+            "access_token": token,
+            "token_type": "bearer",
             "message": "Conta criada com sucesso.",
         }
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
@@ -186,12 +214,16 @@ def login(payload: LoginRequest):
             .filter(AuthUserDatasetLink.auth_user_id == auth_user.id)
             .first()
         )
+        dataset_user_id = dataset_link.dataset_user_id if dataset_link else None
 
+        token = create_access_token(auth_user.id, dataset_user_id)
         return {
             "id": auth_user.id,
             "name": auth_user.name,
             "email": auth_user.email,
-            "dataset_user_id": dataset_link.dataset_user_id if dataset_link else None,
+            "dataset_user_id": dataset_user_id,
+            "access_token": token,
+            "token_type": "bearer",
             "message": "Login efetuado com sucesso.",
         }
     finally:
@@ -199,7 +231,11 @@ def login(payload: LoginRequest):
 
 
 @router.post("/link-dataset-user")
-def link_dataset_user(payload: LinkDatasetUserRequest):
+def link_dataset_user(
+    payload: LinkDatasetUserRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, payload.auth_user_id)
     session = SessionLocal()
     try:
         auth_user = session.query(AuthUser).filter(AuthUser.id == payload.auth_user_id).first()
@@ -247,12 +283,19 @@ def link_dataset_user(payload: LinkDatasetUserRequest):
             "dataset_user_id": payload.dataset_user_id,
             "message": "Associacao criada com sucesso.",
         }
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
 
 @router.get("/{auth_user_id}/dataset-link")
-def get_dataset_link(auth_user_id: int):
+def get_dataset_link(
+    auth_user_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, auth_user_id)
     session = SessionLocal()
     try:
         link = (
@@ -277,7 +320,11 @@ def get_dataset_link(auth_user_id: int):
 
 
 @router.get("/{auth_user_id}/preferences")
-def get_preferences(auth_user_id: int):
+def get_preferences(
+    auth_user_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, auth_user_id)
     session = SessionLocal()
     try:
         auth_user = session.query(AuthUser).filter(AuthUser.id == auth_user_id).first()
@@ -315,7 +362,12 @@ def get_preferences(auth_user_id: int):
 
 
 @router.put("/{auth_user_id}/preferences")
-def update_preferences(auth_user_id: int, payload: PreferencesRequest):
+def update_preferences(
+    auth_user_id: int,
+    payload: PreferencesRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, auth_user_id)
     session = SessionLocal()
     try:
         auth_user = session.query(AuthUser).filter(AuthUser.id == auth_user_id).first()
@@ -374,12 +426,19 @@ def update_preferences(auth_user_id: int, payload: PreferencesRequest):
             "use_friends_boost": prefs.use_friends_boost,
             "message": "Preferencias atualizadas com sucesso.",
         }
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
 
 @router.get("/{auth_user_id}/social-profile")
-def get_social_profile(auth_user_id: int):
+def get_social_profile(
+    auth_user_id: int,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, auth_user_id)
     session = SessionLocal()
     try:
         auth_user = session.query(AuthUser).filter(AuthUser.id == auth_user_id).first()
@@ -436,7 +495,12 @@ def get_social_profile(auth_user_id: int):
 
 
 @router.put("/{auth_user_id}/name")
-def update_auth_name(auth_user_id: int, payload: UpdateNameRequest):
+def update_auth_name(
+    auth_user_id: int,
+    payload: UpdateNameRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, auth_user_id)
     session = SessionLocal()
     try:
         auth_user = session.query(AuthUser).filter(AuthUser.id == auth_user_id).first()
@@ -451,12 +515,20 @@ def update_auth_name(auth_user_id: int, payload: UpdateNameRequest):
             "name": auth_user.name,
             "message": "Nome atualizado com sucesso.",
         }
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
 
 @router.post("/{auth_user_id}/friends")
-def add_friend(auth_user_id: int, payload: AddFriendRequest):
+def add_friend(
+    auth_user_id: int,
+    payload: AddFriendRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, auth_user_id)
     session = SessionLocal()
     try:
         _, _, dataset_user = get_auth_and_dataset_user(session, auth_user_id)
@@ -464,6 +536,9 @@ def add_friend(auth_user_id: int, payload: AddFriendRequest):
         friend = session.query(User).filter(User.user_id == payload.friend_user_id).first()
         if not friend:
             raise HTTPException(status_code=404, detail="Amigo nao encontrado no dataset.")
+
+        if payload.friend_user_id == dataset_user.user_id:
+            raise HTTPException(status_code=400, detail="Nao pode adicionar-se a si proprio.")
 
         friend_ids = parse_friends(dataset_user.friends)
         if payload.friend_user_id in friend_ids:
@@ -479,12 +554,20 @@ def add_friend(auth_user_id: int, payload: AddFriendRequest):
             "friends_count": len(friend_ids),
             "message": "Amigo adicionado com sucesso.",
         }
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()
 
 
 @router.delete("/{auth_user_id}/friends/{friend_user_id}")
-def remove_friend(auth_user_id: int, friend_user_id: str):
+def remove_friend(
+    auth_user_id: int,
+    friend_user_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    ensure_owns_auth_account(current_user, auth_user_id)
     session = SessionLocal()
     try:
         _, _, dataset_user = get_auth_and_dataset_user(session, auth_user_id)
@@ -503,5 +586,8 @@ def remove_friend(auth_user_id: int, friend_user_id: str):
             "friends_count": len(friend_ids),
             "message": "Amigo removido com sucesso.",
         }
+    except Exception:
+        session.rollback()
+        raise
     finally:
         session.close()

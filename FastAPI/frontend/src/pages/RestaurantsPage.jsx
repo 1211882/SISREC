@@ -20,11 +20,12 @@ function RestaurantsPage() {
   const [categoriesError, setCategoriesError] = useState(false);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    // Lock page scroll while the restaurants list owns the viewport.
+    // Using a class keeps the side effect isolated and reversible on unmount.
+    document.body.classList.add("body--no-scroll");
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      document.body.classList.remove("body--no-scroll");
     };
   }, []);
 

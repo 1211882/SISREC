@@ -4,3 +4,10 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .DS_Store
+
+# Secrets / local environment
+.env
+
+# Frontend
+node_modules/
+dist/

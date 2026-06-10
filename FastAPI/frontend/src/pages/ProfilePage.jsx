@@ -1,21 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { API_BASE, fetchWithTimeout } from "../utils/api";
+import { API_BASE, authFetch, fetchWithTimeout, getAuthUser, setAuthUser } from "../utils/api";
 
 
 function ProfilePage() {
-  const authUser = useMemo(() => {
-    const raw = localStorage.getItem("auth_user");
-    if (!raw) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
-  }, []);
+  const authUser = useMemo(() => getAuthUser(), []);
 
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -57,7 +46,7 @@ function ProfilePage() {
     setError("");
 
     try {
-      const response = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/social-profile`);
+      const response = await authFetch(`${API_BASE}/auth/${authUser.id}/social-profile`);
       const payload = await response.json();
 
       if (!response.ok) {
@@ -76,7 +65,7 @@ function ProfilePage() {
   async function loadPreferences() {
     if (!authUser?.id) return;
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/preferences`);
+      const res = await authFetch(`${API_BASE}/auth/${authUser.id}/preferences`);
       const data = await res.json();
       if (res.ok) {
         setPreferences(data);
@@ -127,7 +116,7 @@ function ProfilePage() {
     setSuccessMessage("");
 
     try {
-      const response = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/name`, {
+      const response = await authFetch(`${API_BASE}/auth/${authUser.id}/name`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -140,12 +129,10 @@ function ProfilePage() {
         throw new Error(payload.detail || "Unable to update name.");
       }
 
-      const updatedAuthUser = {
+      setAuthUser({
         ...authUser,
         name: payload.name,
-      };
-      localStorage.setItem("auth_user", JSON.stringify(updatedAuthUser));
-      window.dispatchEvent(new Event("auth-changed"));
+      });
 
       setSuccessMessage(payload.message || "Name updated successfully.");
       await loadProfile();
@@ -163,7 +150,7 @@ function ProfilePage() {
     setSuccessMessage("");
 
     try {
-      const response = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/friends`, {
+      const response = await authFetch(`${API_BASE}/auth/${authUser.id}/friends`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -192,7 +179,7 @@ function ProfilePage() {
     setSuccessMessage("");
 
     try {
-      const response = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/friends/${friendUserId}`, {
+      const response = await authFetch(`${API_BASE}/auth/${authUser.id}/friends/${friendUserId}`, {
         method: "DELETE",
       });
 
@@ -216,7 +203,7 @@ function ProfilePage() {
     setSuccessMessage("");
 
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/preferences`, {
+      const res = await authFetch(`${API_BASE}/auth/${authUser.id}/preferences`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildPreferencesPayload({
@@ -261,7 +248,7 @@ function ProfilePage() {
     setSuccessMessage("");
 
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/preferences`, {
+      const res = await authFetch(`${API_BASE}/auth/${authUser.id}/preferences`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildPreferencesPayload({

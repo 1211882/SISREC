@@ -1,24 +1,24 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 
+from app.api.deps import CurrentUser, get_current_user
 from app.database.session import SessionLocal
 from app.models.business import Business
 from app.models.user import User
 from app.models.review import Review
 from app.models.auth_user_dataset_link import AuthUserDatasetLink
 from app.models.auth_user_preference import AuthUserPreference
-from app.api.routes.recomendations import invalidate_recommendation_cache
+from app.api.routes.recommendations import invalidate_recommendation_cache
 
 
 router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 
 class ReviewCreateRequest(BaseModel):
-	user_id: str = Field(min_length=1, max_length=32)
 	business_id: str = Field(min_length=1, max_length=32)
 	stars: float = Field(ge=1, le=5)
 	text: str | None = Field(default=None, max_length=2000)
@@ -134,10 +134,22 @@ def adjust_profile_categories_for_review(
 
 
 @router.post("")
-def create_review(payload: ReviewCreateRequest):
+def create_review(
+	payload: ReviewCreateRequest,
+	current_user: CurrentUser = Depends(get_current_user),
+):
+	# Authorization: the review is always attributed to the authenticated
+	# user's dataset account; we never trust a user_id from the request body.
+	dataset_user_id = current_user.dataset_user_id
+	if not dataset_user_id:
+		raise HTTPException(
+			status_code=400,
+			detail="A sua conta nao tem um user_id de dataset associado.",
+		)
+
 	session = SessionLocal()
 	try:
-		user = session.query(User).filter(User.user_id == payload.user_id).first()
+		user = session.query(User).filter(User.user_id == dataset_user_id).first()
 		if not user:
 			raise HTTPException(status_code=404, detail="User not found.")
 
@@ -152,25 +164,26 @@ def create_review(payload: ReviewCreateRequest):
 		existing_review = (
 			session.query(Review)
 			.filter(
-				Review.user_id == payload.user_id,
+				Review.user_id == dataset_user_id,
 				Review.business_id == payload.business_id,
 			)
 			.first()
 		)
 
 		previous_stars = existing_review.stars if existing_review else None
+		now_iso = datetime.now(timezone.utc).isoformat()
 
 		if existing_review:
 			existing_review.stars = payload.stars
 			existing_review.recommend = payload.recommend
 			existing_review.text = payload.text
-			existing_review.date = datetime.utcnow().isoformat()
+			existing_review.date = now_iso
 			review = existing_review
 			message = "Review updated successfully."
 		else:
 			review = Review(
 				review_id=uuid4().hex[:24],
-				user_id=payload.user_id,
+				user_id=dataset_user_id,
 				business_id=payload.business_id,
 				stars=payload.stars,
 				recommend=payload.recommend,
@@ -178,7 +191,7 @@ def create_review(payload: ReviewCreateRequest):
 				useful=0,
 				funny=0,
 				cool=0,
-				date=datetime.utcnow().isoformat(),
+				date=now_iso,
 			)
 			session.add(review)
 			message = "Review submitted successfully."
@@ -203,7 +216,7 @@ def create_review(payload: ReviewCreateRequest):
 
 		adjust_profile_categories_for_review(
 			session,
-			payload.user_id,
+			dataset_user_id,
 			business.categories,
 			payload.stars,
 			previous_stars,
@@ -223,6 +236,9 @@ def create_review(payload: ReviewCreateRequest):
 			"date": review.date,
 			"message": message,
 		}
+	except Exception:
+		session.rollback()
+		raise
 	finally:
 		session.close()
 

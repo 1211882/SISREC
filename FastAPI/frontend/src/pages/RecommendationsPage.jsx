@@ -1,25 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { API_BASE, fetchWithTimeout } from "../utils/api";
+import { Link } from "react-router-dom";
+import { API_BASE, authFetch, fetchWithTimeout, getAuthUser } from "../utils/api";
 
 
 function RecommendationsPage() {
-  const navigate = useNavigate();
-
-  const authUser = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("auth_user") || "null");
-    } catch {
-      return null;
-    }
-  }, []);
+  // Route is guarded by <ProtectedRoute>, so authUser is guaranteed here.
+  const authUser = useMemo(() => getAuthUser(), []);
 
   const datasetUserId = authUser?.dataset_user_id || null;
-
-  if (!authUser?.id) {
-    navigate("/login", { replace: true });
-    return null;
-  }
 
   // ── Block 1: My recommendations ──────────────────────────────
   const [myRecs, setMyRecs] = useState([]);
@@ -79,7 +67,7 @@ function RecommendationsPage() {
 
     try {
       const modeConfig = getRecommendationModeConfig(recMode);
-      const res = await fetchWithTimeout(
+      const res = await authFetch(
         `${API_BASE}${modeConfig.endpoint}?limit=10&meal_period=${encodeURIComponent(mealPeriod)}`
       );
       const data = await res.json();
@@ -118,7 +106,7 @@ function RecommendationsPage() {
     setSimilarUsers([]);
 
     try {
-      const res = await fetchWithTimeout(
+      const res = await authFetch(
         `${API_BASE}/recommendations/similar-users/${datasetUserId}?limit=10`
       );
       const data = await res.json();
@@ -233,7 +221,7 @@ function RecommendationsPage() {
       setProfileCategoriesError(null);
 
       try {
-        const res = await fetchWithTimeout(`${API_BASE}/auth/${authUser.id}/preferences`);
+        const res = await authFetch(`${API_BASE}/auth/${authUser.id}/preferences`);
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Unable to load profile categories.");
 
@@ -265,7 +253,7 @@ function RecommendationsPage() {
       setBusinessOptions([]);
 
       try {
-        const res = await fetchWithTimeout(
+        const res = await authFetch(
           `${API_BASE}/recommendations/candidates/${datasetUserId}?limit=100`
         );
         const data = await res.json();
@@ -305,7 +293,7 @@ function RecommendationsPage() {
 
     try {
       const selectedBusiness = businessOptions.find((item) => item.business_id === selectedBusinessId);
-      const res = await fetchWithTimeout(
+      const res = await authFetch(
         `${API_BASE}/recommendations/predict/${datasetUserId}/${encodeURIComponent(selectedBusinessId)}`
       );
       const data = await res.json();

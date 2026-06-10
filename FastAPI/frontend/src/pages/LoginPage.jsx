@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useNavigate } from "react-router-dom";
-import { API_BASE, fetchWithTimeout } from "../utils/api";
+import { useLocation, useNavigate } from "react-router-dom";
+import { API_BASE, fetchWithTimeout, setAuthUser } from "../utils/api";
 
 
 function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = location.state?.from || "/";
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -30,9 +32,8 @@ function LoginPage() {
         throw new Error(payload.detail || "Unable to log in.");
       }
 
-      localStorage.setItem("auth_user", JSON.stringify(payload));
-      window.dispatchEvent(new Event("auth-changed"));
-      navigate("/", { replace: true });
+      setAuthUser(payload);
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err.message || "Unexpected login error.");
     } finally {

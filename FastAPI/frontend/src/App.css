@@ -22,6 +22,10 @@ body,
   height: 100%;
 }
 
+body.body--no-scroll {
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: "Outfit", "Segoe UI", sans-serif;

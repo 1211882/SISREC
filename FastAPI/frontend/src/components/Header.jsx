@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { clearAuth } from "../utils/api";
 
 function Header() {
   const [authUser, setAuthUser] = useState(null);
@@ -31,9 +32,8 @@ function Header() {
   }, []);
 
   function logout() {
-    localStorage.removeItem("auth_user");
+    clearAuth();
     setAuthUser(null);
-    window.dispatchEvent(new Event("auth-changed"));
     navigate("/");
   }
 

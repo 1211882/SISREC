@@ -3,6 +3,7 @@ import math
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import case, func, or_, text
 
+from app.core.scoring import compute_euclidean_distance
 from app.database.session import SessionLocal
 from app.models.business import Business
 
@@ -42,12 +43,6 @@ def build_business_payload(business: Business, euclidean_distance: float | None 
 		"price_range": extract_price_range(business.attributes),
 		"euclidean_distance": round(float(euclidean_distance), 6) if euclidean_distance is not None else None,
 	}
-
-
-def compute_euclidean_distance(stars: float | None, review_count: int | None, max_review_scale: float) -> float:
-	normalized_stars = (stars or 0.0) / 5.0
-	normalized_reviews = math.log1p(review_count or 0) / max_review_scale if max_review_scale > 0 else 0.0
-	return math.sqrt((1.0 - normalized_stars) ** 2 + (1.0 - normalized_reviews) ** 2)
 
 
 @router.get("/categories")
